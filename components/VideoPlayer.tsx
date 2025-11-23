@@ -17,7 +17,7 @@ interface VideoPlayerProps {
   maxDuration?: number;
 }
 
-const SEGMENT_DURATION = 5; // 5 seconds
+const SEGMENT_DURATION = 5; 
 const { width } = Dimensions.get('window');
 
 export const VideoPlayer: React.FC<VideoPlayerProps> = ({
@@ -36,7 +36,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const isPreviewModeRef = useRef(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -60,10 +60,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           setCurrentTime(time);
           setIsPlaying(player.playing);
 
-          // Auto-pause when reaching end time (only in preview mode)
-          if (isPreviewMode && player.playing && time >= endTime - 0.1) {
+          if (isPreviewModeRef.current && player.playing && time >= endTime - 0.1) {
             player.pause();
-            setIsPreviewMode(false);
+            isPreviewModeRef.current = false;
           }
 
           if (player.duration > 0 && duration === 0) {
@@ -78,7 +77,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         }
       };
     }
-  }, [player, duration, endTime, isPreviewMode]);
+  }, [player, duration, endTime]);
 
   useEffect(() => {
     if (duration > 0) {
@@ -93,9 +92,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     if (duration > 0) {
       const newStartTime = Math.max(0, Math.min(value, duration - SEGMENT_DURATION));
       setStartTime(newStartTime);
-      if (player) {
-        player.currentTime = newStartTime;
-      }
+    }
+  };
+
+  const handleStartTimeSlidingComplete = (value: number) => {
+    if (duration > 0 && player) {
+      const newStartTime = Math.max(0, Math.min(value, duration - SEGMENT_DURATION));
+      player.currentTime = newStartTime;
     }
   };
 
@@ -117,7 +120,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (isPlaying) {
         player.pause();
       } else {
-        setIsPreviewMode(false);
+        isPreviewModeRef.current = false;
         player.play();
       }
     }
@@ -125,9 +128,23 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   const handlePreview = () => {
     if (player) {
-      setIsPreviewMode(true);
-      player.currentTime = startTime;
-      player.play();
+      // First pause if playing
+      if (player.playing) {
+        player.pause();
+      }
+
+      setTimeout(() => {
+        if (player) {
+          isPreviewModeRef.current = true;
+          player.currentTime = startTime;
+
+          setTimeout(() => {
+            if (player) {
+              player.play();
+            }
+          }, 300);
+        }
+      }, 100);
     }
   };
 
@@ -278,6 +295,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             maximumValue={Math.max(0, duration - SEGMENT_DURATION)}
             value={startTime}
             onValueChange={handleStartTimeChange}
+            onSlidingComplete={handleStartTimeSlidingComplete}
             minimumTrackTintColor="#EC4899"
             maximumTrackTintColor="#3F3F46"
             thumbTintColor="#EC4899"
@@ -312,13 +330,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         </TouchableOpacity>
 
         <TouchableOpacity
-          onPress={() => {
-            if (player) {
-              setIsPreviewMode(true);
-              player.currentTime = startTime;
-              player.play();
-            }
-          }}
+          onPress={handlePreview}
           className="flex-1 rounded-xl overflow-hidden"
           activeOpacity={0.8}
         >
